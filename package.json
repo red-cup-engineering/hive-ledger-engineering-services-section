@@ -1,0 +1,7 @@
+{
+  "name": "@red-cup-engineering/hive-ledger-services-section",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Red Cup Engineering service section for the Hive wallet-analyzer lineage: an account's chain and Hive-Engine history turned into a costed Beancount ledger.",
+  "license": "UNLICENSED"
+}

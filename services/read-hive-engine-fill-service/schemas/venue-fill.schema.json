@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://registry.561.group/@red-cup-engineering/venue-fill-booking-service/schema/venue-fill.schema.json",
+  "title": "venueFill",
+  "type": "object",
+  "description": "One standard-shape venue fill: a completed trade on any venue (Alpaca paper account, Hive-Engine, or an internal market), ready to be turned into a Beancount transaction. Provisional pending the computer-data seat's standard-fill-quote-mandate-schemas (task:standard-fill-quote-mandate-schemas, not yet fabricated).",
+  "required": ["venue", "account", "fillId", "date", "side", "baseCommodity", "quoteCommodity", "baseQuantity", "quoteAmount", "custodyAccount", "mandateId"],
+  "properties": {
+    "venue": { "type": "string", "minLength": 1, "description": "The venue that executed the fill, e.g. \"hive-engine\", \"alpaca\", \"internal-market\"." },
+    "account": { "type": "string", "minLength": 1, "description": "The venue-side account or identity that executed the fill, e.g. a Hive account name or an Alpaca account id." },
+    "fillId": { "type": "string", "minLength": 1, "description": "The venue's own unique identifier for this fill (a Hive-Engine transaction id, an Alpaca order id)." },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "The Beancount transaction date, YYYY-MM-DD." },
+    "side": { "type": "string", "enum": ["buy", "sell"], "description": "\"buy\" acquires baseCommodity by paying quoteCommodity; \"sell\" disposes baseCommodity for quoteCommodity." },
+    "baseCommodity": { "type": "string", "minLength": 1 },
+    "quoteCommodity": { "type": "string", "minLength": 1 },
+    "baseQuantity": { "type": "string", "pattern": "^\\d+(\\.\\d+)?$", "description": "Positive plain decimal string; the exact base-commodity quantity traded." },
+    "quoteAmount": { "type": "string", "pattern": "^\\d+(\\.\\d+)?$", "description": "Positive plain decimal string; the exact quote-commodity amount actually settled on the custody account for this fill, before any separately-posted fee. A venue fee already embedded in this amount (an AMM pool fee, never a separate wallet movement) is not represented by `feeAmount`; carry it informationally as venuePoolFee instead." },
+    "feeAmount": { "type": "string", "pattern": "^\\d+(\\.\\d+)?$", "default": "0", "description": "Positive plain decimal string; a fee that moves as an ADDITIONAL separate posting distinct from quoteAmount (e.g. an Alpaca commission). Zero when the venue charges no separate fee or nets it invisibly into quoteAmount." },
+    "feeCommodity": { "type": "string", "description": "Required when feeAmount is nonzero." },
+    "feeAccount": { "type": "string", "description": "The Beancount Expenses:Investment:Fees:<Venue> account to post feeAmount to; required when feeAmount is nonzero." },
+    "custodyAccount": { "type": "string", "minLength": 1, "description": "The single Beancount account holding both baseCommodity and quoteCommodity for this venue/account (an existing ledger account name, never invented)." },
+    "mandateId": { "type": "string", "minLength": 1, "description": "The strategy or mandate id this fill executes under, or \"manual\"." },
+    "narration": { "type": "string", "description": "Optional narration override; defaults to \"<venue> <side> <baseCommodity> for <quoteCommodity>\"." },
+    "witnessBlock": { "type": "string", "description": "The venue's block/ledger height at which the fill settled, when the venue is chain-based." },
+    "witnesses": {
+      "type": "array",
+      "description": "Independent reads of this fill, one per node/source consulted. When two or more are present and their databaseHash values disagree, the fill is refused rather than booked.",
+      "items": {
+        "type": "object",
+        "required": ["node"],
+        "properties": {
+          "node": { "type": "string" },
+          "databaseHash": { "type": "string" }
+        }
+      }
+    },
+    "venuePoolFee": {
+      "description": "Informational only, never posted: a venue-reported fee already netted into quoteAmount (e.g. a Hive-Engine marketpools swap's pool fee).",
+      "type": ["object", "null"]
+    }
+  }
+}

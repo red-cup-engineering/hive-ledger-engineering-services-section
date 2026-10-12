@@ -1,0 +1,31 @@
+{
+  "name": "@red-cup-engineering/read-hive-engine-fill-service",
+  "version": "0.1.0",
+  "description": "Reads one Hive-Engine `marketpools.swapTokens`, `market.sell`, or `market.buy` fill by transaction id from at least two public nodes, read-only, shaping it into the standard venue-fill record or refusing (never shaping a fill) when the nodes disagree on `databaseHash`, the operation cannot be resolved unambiguously, its contract/action is unsupported, or its logs carry no completed transfer to and from the queried account.",
+  "type": "module",
+  "private": false,
+  "license": "UNLICENSED",
+  "exports": "./scripts/read-hive-engine-fill.mjs",
+  "bin": {
+    "read-hive-engine-fill": "scripts/read-hive-engine-fill.mjs"
+  },
+  "files": [
+    "scripts",
+    "README.md",
+    "package.json",
+    "schemas"
+  ],
+  "dependencies": {
+    "@red-cup-engineering/javascript-node-services-section": "workspace:*",
+    "@red-cup-engineering/hive-blockchain-client-service": "workspace:*"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "check": "node --check scripts/read-hive-engine-fill.mjs",
+    "test": "node --test test/*.test.mjs",
+    "pack:dry-run": "npm pack --dry-run --ignore-scripts"
+  },
+  "engines": {
+    "node": ">=24.2.0"
+  }
+}

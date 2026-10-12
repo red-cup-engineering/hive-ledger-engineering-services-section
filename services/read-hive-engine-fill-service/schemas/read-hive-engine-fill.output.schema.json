@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://registry.561.group/@red-cup-engineering/venue-fill-booking-service/schema/read-hive-engine-fill.output.schema.json",
+  "title": "readHiveEngineFillOutput",
+  "type": "object",
+  "required": ["ok"],
+  "oneOf": [
+    {
+      "properties": { "ok": { "const": true }, "fill": { "$ref": "./venue-fill.schema.json" } },
+      "required": ["ok", "fill"]
+    },
+    {
+      "properties": {
+        "ok": { "const": false },
+        "refusal": {
+          "type": "object",
+          "required": ["transactionId", "reason"],
+          "properties": {
+            "transactionId": { "type": "string" },
+            "reason": { "enum": ["ambiguous-result", "witness-disagreement", "unsupported-contract-action", "no-completed-transfer"] }
+          }
+        }
+      },
+      "required": ["ok", "refusal"]
+    }
+  ]
+}
