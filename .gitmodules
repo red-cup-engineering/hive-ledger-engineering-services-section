@@ -1,0 +1,20 @@
+[submodule "read-hive-engine-fill-service"]
+	path = services/read-hive-engine-fill-service
+	url = https://github.com/red-cup-engineering/read-hive-engine-fill-service.git
+	branch = main
+[submodule "read-hive-engine-account-history-service"]
+	path = services/read-hive-engine-account-history-service
+	url = https://github.com/red-cup-engineering/read-hive-engine-account-history-service.git
+	branch = main
+[submodule "read-hive-account-history-service"]
+	path = services/read-hive-account-history-service
+	url = https://github.com/red-cup-engineering/read-hive-account-history-service.git
+	branch = main
+[submodule "derive-hive-account-ledger-service"]
+	path = services/derive-hive-account-ledger-service
+	url = https://github.com/red-cup-engineering/derive-hive-account-ledger-service.git
+	branch = main
+[submodule "hive-auto-ledger-cli"]
+	path = apps
+	url = https://github.com/red-cup-engineering/hive-auto-ledger-cli.git
+	branch = main
