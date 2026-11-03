@@ -9,7 +9,7 @@
 
 Hive Ledger Services realizes the Wallet Analyzer, Wallet Engine Analyzer, and
 Synthesized Wallet Analyzer lines of the 2025-12-15 Hive Auto Ledger (HAL)
-roadmap (`hive-services-section/content/text/documents/notes/hal/hive-auto-ledger-hal.md`):
+roadmap (`hive-engineering-services-section/content/text/documents/notes/hal/hive-auto-ledger-hal.md`):
 `read-hive-account-history-service` reads a Hive account's mainnet operation
 history from two independent public nodes, witnessed against each other, with
 VESTS carried alongside HP at the chain's vests-to-HP ratio; `read-hive-engine-account-history-service`
