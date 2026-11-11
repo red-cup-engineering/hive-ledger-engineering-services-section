@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://registry.561.group/@red-cup-engineering/read-hive-engine-account-history-service/schema/read-hive-engine-account-history.output.schema.json",
+  "title": "readHiveEngineAccountHistoryOutput",
+  "type": "object",
+  "required": [
+    "account",
+    "nodesUsed",
+    "fillNodesUsed",
+    "entryCount",
+    "fillCount",
+    "entries",
+    "fills",
+    "refusals"
+  ],
+  "properties": {
+    "account": {
+      "type": "string"
+    },
+    "nodesUsed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fillNodesUsed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "from": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "to": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "entryCount": {
+      "type": "integer"
+    },
+    "fillCount": {
+      "type": "integer"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "transactionId",
+          "timestamp",
+          "operation",
+          "account",
+          "classification",
+          "witnessed"
+        ],
+        "properties": {
+          "transactionId": {
+            "type": "string"
+          },
+          "blockNumber": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "account": {
+            "type": "string"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "unclassified"
+            ]
+          },
+          "witnessed": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "fills": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "refusals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "witness-disagreement",
+              "witness-fetch-failed",
+              "unclassified-operation"
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

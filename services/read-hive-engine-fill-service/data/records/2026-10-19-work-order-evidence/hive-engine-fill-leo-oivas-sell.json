@@ -1,0 +1,165 @@
+{
+  "measuredOn": "2026-10-19",
+  "note": "public read-only RPC; getTransactionInfo for the taker (sell) transaction and the resting maker (buy) transaction of one LEO/SWAP.HIVE trade",
+  "trade": {
+    "_id": 13202788,
+    "type": "sell",
+    "buyer": "leotaker",
+    "seller": "oivas",
+    "symbol": "LEO",
+    "quantity": "0.117",
+    "price": "0.06920144",
+    "timestamp": 1792421817,
+    "volume": "0.00809656",
+    "buyTxId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+    "sellTxId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6"
+  },
+  "takerTransaction": {
+    "https://api.hive-engine.com/rpc/blockchain": {
+      "blockNumber": 63845990,
+      "refHiveBlockNumber": 110912470,
+      "transactionId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6",
+      "sender": "oivas",
+      "contract": "market",
+      "action": "sell",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"0.117\",\"price\":\"0.06920142\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "6753b884d140be9dac2d1392c2e0b0e42209bb558b42e5e750c3465ba6d95b92",
+      "hash": "f5e97f01ab878d92571e0830e328bb2b2e90d8039d1a2439088e965fe10aaee5",
+      "databaseHash": "360c8c2e0ff92f4e06031f73593a1e9f69aba69c4f90c146c39d8d47a65f64e2",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"oivas\",\"to\":\"market\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"leotaker\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"oivas\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.00809656\"}},{\"contract\":\"market\",\"event\":\"orderClosed\",\"data\":{\"account\":\"oivas\",\"type\":\"sell\",\"txId\":\"6dc67deff10fe4a1e2da0070bf00e82a5682efb6\"}}]}"
+    },
+    "https://api2.hive-engine.com/rpc/blockchain": {
+      "blockNumber": 63845990,
+      "refHiveBlockNumber": 110912470,
+      "transactionId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6",
+      "sender": "oivas",
+      "contract": "market",
+      "action": "sell",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"0.117\",\"price\":\"0.06920142\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "6753b884d140be9dac2d1392c2e0b0e42209bb558b42e5e750c3465ba6d95b92",
+      "hash": "f5e97f01ab878d92571e0830e328bb2b2e90d8039d1a2439088e965fe10aaee5",
+      "databaseHash": "360c8c2e0ff92f4e06031f73593a1e9f69aba69c4f90c146c39d8d47a65f64e2",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"oivas\",\"to\":\"market\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"leotaker\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"oivas\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.00809656\"}},{\"contract\":\"market\",\"event\":\"orderClosed\",\"data\":{\"account\":\"oivas\",\"type\":\"sell\",\"txId\":\"6dc67deff10fe4a1e2da0070bf00e82a5682efb6\"}}]}"
+    },
+    "https://herpc.dtools.dev/blockchain": {
+      "blockNumber": 63845990,
+      "refHiveBlockNumber": 110912470,
+      "transactionId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6",
+      "sender": "oivas",
+      "contract": "market",
+      "action": "sell",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"0.117\",\"price\":\"0.06920142\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "6753b884d140be9dac2d1392c2e0b0e42209bb558b42e5e750c3465ba6d95b92",
+      "hash": "f5e97f01ab878d92571e0830e328bb2b2e90d8039d1a2439088e965fe10aaee5",
+      "databaseHash": "360c8c2e0ff92f4e06031f73593a1e9f69aba69c4f90c146c39d8d47a65f64e2",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"oivas\",\"to\":\"market\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"leotaker\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"oivas\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.00809656\"}},{\"contract\":\"market\",\"event\":\"orderClosed\",\"data\":{\"account\":\"oivas\",\"type\":\"sell\",\"txId\":\"6dc67deff10fe4a1e2da0070bf00e82a5682efb6\"}}]}"
+    },
+    "https://herpc.actifit.io/blockchain": {
+      "blockNumber": 63845990,
+      "refHiveBlockNumber": 110912470,
+      "transactionId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6",
+      "sender": "oivas",
+      "contract": "market",
+      "action": "sell",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"0.117\",\"price\":\"0.06920142\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "6753b884d140be9dac2d1392c2e0b0e42209bb558b42e5e750c3465ba6d95b92",
+      "hash": "f5e97f01ab878d92571e0830e328bb2b2e90d8039d1a2439088e965fe10aaee5",
+      "databaseHash": "360c8c2e0ff92f4e06031f73593a1e9f69aba69c4f90c146c39d8d47a65f64e2",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"oivas\",\"to\":\"market\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"leotaker\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"oivas\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.00809656\"}},{\"contract\":\"market\",\"event\":\"orderClosed\",\"data\":{\"account\":\"oivas\",\"type\":\"sell\",\"txId\":\"6dc67deff10fe4a1e2da0070bf00e82a5682efb6\"}}]}"
+    },
+    "https://api.primersion.com/blockchain": {
+      "blockNumber": 63845990,
+      "refHiveBlockNumber": 110912470,
+      "transactionId": "6dc67deff10fe4a1e2da0070bf00e82a5682efb6",
+      "sender": "oivas",
+      "contract": "market",
+      "action": "sell",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"0.117\",\"price\":\"0.06920142\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "6753b884d140be9dac2d1392c2e0b0e42209bb558b42e5e750c3465ba6d95b92",
+      "hash": "f5e97f01ab878d92571e0830e328bb2b2e90d8039d1a2439088e965fe10aaee5",
+      "databaseHash": "360c8c2e0ff92f4e06031f73593a1e9f69aba69c4f90c146c39d8d47a65f64e2",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"oivas\",\"to\":\"market\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"leotaker\",\"symbol\":\"LEO\",\"quantity\":\"0.117\"}},{\"contract\":\"tokens\",\"event\":\"transferFromContract\",\"data\":{\"from\":\"market\",\"to\":\"oivas\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.00809656\"}},{\"contract\":\"market\",\"event\":\"orderClosed\",\"data\":{\"account\":\"oivas\",\"type\":\"sell\",\"txId\":\"6dc67deff10fe4a1e2da0070bf00e82a5682efb6\"}}]}"
+    }
+  },
+  "makerTransaction": {
+    "https://api.hive-engine.com/rpc/blockchain": {
+      "blockNumber": 63845985,
+      "refHiveBlockNumber": 110912465,
+      "transactionId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+      "sender": "leotaker",
+      "contract": "market",
+      "action": "buy",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"3.438\",\"price\":\"0.06920144\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "7a77176ad4dd11883557825a106c77b541c1bec40b9b10bfd02f9fd1c1105107",
+      "hash": "9cd672523b7cd14fdb378720dc3a17b7664713b2b4a587d03a8582d1c481a292",
+      "databaseHash": "3a4824d803b56639de187db222016e6170fe95d3ef12f54f1eb7b3589778bf14",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"leotaker\",\"to\":\"market\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.23791456\"}}]}"
+    },
+    "https://api2.hive-engine.com/rpc/blockchain": {
+      "blockNumber": 63845985,
+      "refHiveBlockNumber": 110912465,
+      "transactionId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+      "sender": "leotaker",
+      "contract": "market",
+      "action": "buy",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"3.438\",\"price\":\"0.06920144\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "7a77176ad4dd11883557825a106c77b541c1bec40b9b10bfd02f9fd1c1105107",
+      "hash": "9cd672523b7cd14fdb378720dc3a17b7664713b2b4a587d03a8582d1c481a292",
+      "databaseHash": "3a4824d803b56639de187db222016e6170fe95d3ef12f54f1eb7b3589778bf14",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"leotaker\",\"to\":\"market\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.23791456\"}}]}"
+    },
+    "https://herpc.dtools.dev/blockchain": {
+      "blockNumber": 63845985,
+      "refHiveBlockNumber": 110912465,
+      "transactionId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+      "sender": "leotaker",
+      "contract": "market",
+      "action": "buy",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"3.438\",\"price\":\"0.06920144\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "7a77176ad4dd11883557825a106c77b541c1bec40b9b10bfd02f9fd1c1105107",
+      "hash": "9cd672523b7cd14fdb378720dc3a17b7664713b2b4a587d03a8582d1c481a292",
+      "databaseHash": "3a4824d803b56639de187db222016e6170fe95d3ef12f54f1eb7b3589778bf14",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"leotaker\",\"to\":\"market\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.23791456\"}}]}"
+    },
+    "https://herpc.actifit.io/blockchain": {
+      "blockNumber": 63845985,
+      "refHiveBlockNumber": 110912465,
+      "transactionId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+      "sender": "leotaker",
+      "contract": "market",
+      "action": "buy",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"3.438\",\"price\":\"0.06920144\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "7a77176ad4dd11883557825a106c77b541c1bec40b9b10bfd02f9fd1c1105107",
+      "hash": "9cd672523b7cd14fdb378720dc3a17b7664713b2b4a587d03a8582d1c481a292",
+      "databaseHash": "3a4824d803b56639de187db222016e6170fe95d3ef12f54f1eb7b3589778bf14",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"leotaker\",\"to\":\"market\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.23791456\"}}]}"
+    },
+    "https://api.primersion.com/blockchain": {
+      "blockNumber": 63845985,
+      "refHiveBlockNumber": 110912465,
+      "transactionId": "fe3171ce4bf332b291851573166ed2ac285f417b",
+      "sender": "leotaker",
+      "contract": "market",
+      "action": "buy",
+      "payload": "{\"symbol\":\"LEO\",\"quantity\":\"3.438\",\"price\":\"0.06920144\",\"isSignedWithActiveKey\":true}",
+      "executedCodeHash": "7a77176ad4dd11883557825a106c77b541c1bec40b9b10bfd02f9fd1c1105107",
+      "hash": "9cd672523b7cd14fdb378720dc3a17b7664713b2b4a587d03a8582d1c481a292",
+      "databaseHash": "3a4824d803b56639de187db222016e6170fe95d3ef12f54f1eb7b3589778bf14",
+      "logs": "{\"events\":[{\"contract\":\"tokens\",\"event\":\"transferToContract\",\"data\":{\"from\":\"leotaker\",\"to\":\"market\",\"symbol\":\"SWAP.HIVE\",\"quantity\":\"0.23791456\"}}]}"
+    }
+  },
+  "pathProbe": {
+    "https://herpc.dtools.dev/rpc/blockchain": {
+      "status": 404,
+      "hasResult": false
+    },
+    "https://herpc.actifit.io/rpc/blockchain": {
+      "status": 404,
+      "hasResult": false
+    },
+    "https://api.primersion.com/rpc/blockchain": {
+      "status": 404,
+      "hasResult": false
+    }
+  }
+}
