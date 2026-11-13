@@ -2,7 +2,7 @@
 
 Produced 2026-06-11 by a design-recon pass over `lib/ledger-topology`,
 `lib/financial-topology`, `lib/meme-topology`, `lib/hive-topology`, and
-`apps/waggle` (`topology.mts`, `chain.mts`). Condensed; decisions preserved.
+`hive-auto-ledger-cli/waggle` (`topology.mts`, `chain.mts`). Condensed; decisions preserved.
 
 ## A. Accounting bridge — proposed `lib/hive-account-ledger`
 
@@ -71,7 +71,7 @@ term/predicate/attestation/carrier pattern:
 
 ## C. Rewards/curation math — proposed `lib/hive-rewards-math`
 
-`apps/waggle/src/chain.mts` has reads but no formulas; `topology.mts` models
+`hive-auto-ledger-cli/waggle/src/chain.mts` has reads but no formulas; `topology.mts` models
 relationships, not quantities. Centralize the math, pure and testable:
 
 - `vote-value.mts`: `voteValue(rshares, rewardFund, recentClaims)`;

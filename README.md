@@ -18,7 +18,7 @@ for market and pool fills rather than re-deriving them; `derive-hive-account-led
 is the pure transformation turning both histories plus price directives into a
 costed Beancount ledger for the supported account operations, composing
 `@red-cup-engineering/derive-set-of-fill-transactions-service` for venue fills;
-`apps/hive-auto-ledger-cli.mjs` composes all three for one account and range,
+`hive-auto-ledger-cli/hive-auto-ledger-cli.mjs` composes all three for one account and range,
 writing the ledger and running `farolfi`'s balance and valuation reports over
 it. Every read is read-only; no key is ever required or accepted.
 
