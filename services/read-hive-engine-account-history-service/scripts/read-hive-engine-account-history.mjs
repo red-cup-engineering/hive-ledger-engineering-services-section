@@ -176,9 +176,9 @@ export async function readHiveEngineAccountHistory(input, { fetchImpl = fetch, r
   ]);
   const secondaryOk = Array.isArray(rowsSecondary);
   const witnessed = secondaryOk && rowsAgree(rowsPrimary, rowsSecondary);
-  const refusals = [];
+  const rejections = [];
   if (!witnessed) {
-    refusals.push({
+    rejections.push({
       reason: secondaryOk ? "witness-disagreement" : "witness-fetch-failed",
       error: secondaryOk ? undefined : rowsSecondary.error,
     });
@@ -208,7 +208,7 @@ export async function readHiveEngineAccountHistory(input, { fetchImpl = fetch, r
       witnessed,
     });
     if (kind === "unclassified") {
-      refusals.push({ reason: "unclassified-operation", transactionId: row.transactionId, operation: row.operation });
+      rejections.push({ reason: "unclassified-operation", transactionId: row.transactionId, operation: row.operation });
     }
   }
 
@@ -244,7 +244,7 @@ export async function readHiveEngineAccountHistory(input, { fetchImpl = fetch, r
     fillCount: fills.length,
     entries,
     fills,
-    refusals,
+    refusals: rejections,
   };
 }
 

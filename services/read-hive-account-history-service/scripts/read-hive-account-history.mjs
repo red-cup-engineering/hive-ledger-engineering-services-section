@@ -162,7 +162,7 @@ export async function readHiveAccountHistory(input, { clientFactory } = {}) {
   );
 
   const operations = [];
-  const refusals = [];
+  const rejections = [];
   let start = -1;
   let pagesFetched = 0;
   for (;;) {
@@ -184,7 +184,7 @@ export async function readHiveAccountHistory(input, { clientFactory } = {}) {
     }
     const witnessOk = witnessError === null && pagesAgree(pageA, pageB);
     if (!witnessOk) {
-      refusals.push({
+      rejections.push({
         reason: witnessError ? "witness-fetch-failed" : "witness-disagreement",
         start,
         error: witnessError ?? undefined,
@@ -243,7 +243,7 @@ export async function readHiveAccountHistory(input, { clientFactory } = {}) {
       source: "condenser_api.get_dynamic_global_properties",
       atBlock: dgp.head_block_number,
     },
-    refusals,
+    refusals: rejections,
   };
 }
 
