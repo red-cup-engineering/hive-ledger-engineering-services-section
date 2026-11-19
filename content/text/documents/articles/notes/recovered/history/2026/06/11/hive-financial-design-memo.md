@@ -1,4 +1,18 @@
-# Design memo: Hive accounting bridge, hive-engine-topology, rewards math
+---
+title: "Design memo: Hive accounting bridge, hive-engine-topology, rewards math"
+description: "Design decisions for a Hive account-ledger bridge into ledger-topology, a hive-engine topology, and the Hive rewards math."
+date-created: 2026-06-11
+date-modified: 2026-11-19
+type: note
+keywords:
+  - hive
+  - ledger-topology
+  - financial-topology
+  - waggle
+sources:
+  - path: "services/561-group-services-section/content/text/documents/articles/notes/history/2026/06/11/hive-financial-design-memo.md"
+    date: 2026-06-11
+---
 
 Produced 2026-06-11 by a design-recon pass over `lib/ledger-topology`,
 `lib/financial-topology`, `lib/meme-topology`, `lib/hive-topology`, and
@@ -94,3 +108,9 @@ vote power.
   holdings; HE topology should mirror it.
 - `meme-topology` attestation dedup — helps idempotency.
 - `ledger-codecs` rational arithmetic — foundation for all reward math.
+
+## Path variants
+
+The 561-group copy of this memo names the waggle app `apps/waggle` (in `apps/waggle/src/chain.mts` and the header's `apps/waggle` (`topology.mts`, `chain.mts`)).
+This copy names it `hive-auto-ledger-cli/waggle`.
+The two copies disagree on the app's path; this copy keeps `hive-auto-ledger-cli/waggle`.
