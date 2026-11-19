@@ -1,0 +1,4 @@
+[submodule "hive-auto-ledger-cli"]
+	path = hive-auto-ledger-cli
+	url = https://github.com/red-cup-engineering/hive-auto-ledger-cli.git
+	branch = main
