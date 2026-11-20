@@ -129,18 +129,18 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
     throw new TypeError("derive-hive-account-ledger: input.custodyAccount must be a non-empty string");
   }
   const {
-    account, rangeStart, rangeEnd, custodyAccount: storageAccount, hiveEngineCustodyAccount: hiveEngineStorageAccount,
+    account, rangeStart, rangeEnd, custodyAccount, hiveEngineCustodyAccount,
     hiveOperations = [], hiveEngineEntries = [], hiveEngineFills = [],
     openingBalances = { hive: ZERO, hbd: ZERO, vests: ZERO, hiveEngine: {} },
     chainClosingBalances = { hive: ZERO, hbd: ZERO, vests: ZERO, hiveEngine: {} },
   } = input;
 
-  const savingsAccount = `${storageAccount}:Savings`;
-  const pendingSavingsWithdrawalAccount = `${storageAccount}:Pending-Savings-Withdrawal`;
-  const tradingAccount = `${storageAccount}:Trading`;
-  const heStakedAccount = hiveEngineStorageAccount ? `${hiveEngineStorageAccount}:Staked` : null;
-  const hePendingUnstakeAccount = hiveEngineStorageAccount ? `${hiveEngineStorageAccount}:Pending-Unstake` : null;
-  const heDelegatedOutAccount = hiveEngineStorageAccount ? `${hiveEngineStorageAccount}:Delegated-Out` : null;
+  const savingsAccount = `${custodyAccount}:Savings`;
+  const pendingSavingsWithdrawalAccount = `${custodyAccount}:Pending-Savings-Withdrawal`;
+  const tradingAccount = `${custodyAccount}:Trading`;
+  const heStakedAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Staked` : null;
+  const hePendingUnstakeAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Pending-Unstake` : null;
+  const heDelegatedOutAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Delegated-Out` : null;
 
   const AUTHOR = "Income:Hive:Author";
   const CURATION = "Income:Hive:Curation";
@@ -152,7 +152,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
   const accountsOpened = new Set();
   const openAccount = (a) => accountsOpened.add(a);
   const transactions = [];
-  const rejections = [];
+  const refusals = [];
   const nativeRewardTotals = { author: {}, curation: {}, interest: {}, staking: {} };
   const pendingAuthor = {};
   const pendingCuration = {};
@@ -183,8 +183,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         const incoming = payload.to === account;
         const outgoing = payload.from === account;
         if (!incoming && !outgoing) break;
-        openAccount(storageAccount);
-        const storageAmount = incoming ? amount : negateDecimalString(amount);
+        openAccount(custodyAccount);
+        const custodyAmount = incoming ? amount : negateDecimalString(amount);
         const counterAccount = incoming ? OTHER_INCOME : OTHER_EXPENSE;
         openAccount(counterAccount);
         transactions.push({
@@ -194,8 +194,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             narration: `Hive transfer ${incoming ? "from" : "to"} ${incoming ? payload.from : payload.to}`,
             metadata: { op_id: `${trxId}-${index}`, memo: payload.memo ?? "" },
             postings: [
-              { account: storageAccount, amount: storageAmount, commodity },
-              { account: counterAccount, amount: negateDecimalString(storageAmount), commodity },
+              { account: custodyAccount, amount: custodyAmount, commodity },
+              { account: counterAccount, amount: negateDecimalString(custodyAmount), commodity },
             ],
           }),
         });
@@ -204,7 +204,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "transfer_to_vesting_completed": {
         const hive = stripUnitSuffix(payload.hive_vested);
         const vests = stripUnitSuffix(payload.vesting_shares_received);
-        openAccount(storageAccount);
+        openAccount(custodyAccount);
         // Beancount cannot infer that a HIVE decrease and a VESTS increase net to zero without
         // a price link; the disposed (HIVE) leg carries the exact per-unit VESTS rate this
         // conversion actually settled at, so the transaction balances on the chain's own numbers.
@@ -216,8 +216,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             narration: "Power up (HIVE to VESTS)",
             metadata: { op_id: `${trxId}-${index}` },
             postings: [
-              { account: storageAccount, amount: negateDecimalString(hive), commodity: "HIVE", price: priceVestsPerHive ? `${priceVestsPerHive} VESTS` : undefined },
-              { account: storageAccount, amount: vests, commodity: "VESTS" },
+              { account: custodyAccount, amount: negateDecimalString(hive), commodity: "HIVE", price: priceVestsPerHive ? `${priceVestsPerHive} VESTS` : undefined },
+              { account: custodyAccount, amount: vests, commodity: "VESTS" },
             ],
           }),
         });
@@ -226,8 +226,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "fill_vesting_withdraw": {
         const withdrawn = splitAmount(payload.withdrawn);
         const deposited = splitAmount(payload.deposited);
-        if (withdrawn.commodity !== "VESTS") { rejections.push({ reason: "unexpected-fill-vesting-withdraw-shape", opId: `${trxId}-${index}` }); break; }
-        openAccount(storageAccount);
+        if (withdrawn.commodity !== "VESTS") { refusals.push({ reason: "unexpected-fill-vesting-withdraw-shape", opId: `${trxId}-${index}` }); break; }
+        openAccount(custodyAccount);
         const priceDepositedPerVests = isZero(withdrawn.amount) ? null : divideDecimalStrings(deposited.amount, withdrawn.amount, 12);
         transactions.push({
           date,
@@ -236,8 +236,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             narration: "Power down (VESTS to HIVE)",
             metadata: { op_id: `${trxId}-${index}` },
             postings: [
-              { account: storageAccount, amount: negateDecimalString(withdrawn.amount), commodity: "VESTS", price: priceDepositedPerVests ? `${priceDepositedPerVests} ${deposited.commodity}` : undefined },
-              { account: storageAccount, amount: deposited.amount, commodity: deposited.commodity },
+              { account: custodyAccount, amount: negateDecimalString(withdrawn.amount), commodity: "VESTS", price: priceDepositedPerVests ? `${priceDepositedPerVests} ${deposited.commodity}` : undefined },
+              { account: custodyAccount, amount: deposited.amount, commodity: deposited.commodity },
             ],
           }),
         });
@@ -272,8 +272,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
           const pA = bucketTakeAll(pendingAuthor, commodity);
           const pC = bucketTakeAll(pendingCuration, commodity);
           const split = splitClaimByAccrual(claimAmount, pA, pC);
-          openAccount(storageAccount);
-          postings.push({ account: storageAccount, amount: claimAmount, commodity });
+          openAccount(custodyAccount);
+          postings.push({ account: custodyAccount, amount: claimAmount, commodity });
           if (!isZero(split.author)) {
             openAccount(AUTHOR);
             postings.push({ account: AUTHOR, amount: negateDecimalString(split.author), commodity });
@@ -296,7 +296,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "interest": {
         const amount = stripUnitSuffix(payload.interest);
         if (isZero(amount)) break;
-        const destination = payload.is_saved_into_hbd_balance ? savingsAccount : storageAccount;
+        const destination = payload.is_saved_into_hbd_balance ? savingsAccount : custodyAccount;
         openAccount(destination);
         openAccount(INTEREST);
         transactions.push({
@@ -317,7 +317,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "transfer_to_savings": {
         if (payload.to !== account) break;
         const { amount, commodity } = splitAmount(payload.amount);
-        openAccount(storageAccount);
+        openAccount(custodyAccount);
         openAccount(savingsAccount);
         transactions.push({
           date,
@@ -326,7 +326,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             narration: "Transfer to savings",
             metadata: { op_id: `${trxId}-${index}` },
             postings: [
-              { account: storageAccount, amount: negateDecimalString(amount), commodity },
+              { account: custodyAccount, amount: negateDecimalString(amount), commodity },
               { account: savingsAccount, amount, commodity },
             ],
           }),
@@ -357,7 +357,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         if (payload.from !== account) break;
         const { amount, commodity } = splitAmount(payload.amount);
         openAccount(pendingSavingsWithdrawalAccount);
-        openAccount(storageAccount);
+        openAccount(custodyAccount);
         pendingWithdrawalsByRequestId.delete(String(payload.request_id));
         transactions.push({
           date,
@@ -367,7 +367,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             metadata: { op_id: `${trxId}-${index}`, request_id: String(payload.request_id ?? "") },
             postings: [
               { account: pendingSavingsWithdrawalAccount, amount: negateDecimalString(amount), commodity },
-              { account: storageAccount, amount, commodity },
+              { account: custodyAccount, amount, commodity },
             ],
           }),
         });
@@ -382,7 +382,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         if (payload.from !== account) break;
         const requestId = String(payload.request_id ?? "");
         const pending = pendingWithdrawalsByRequestId.get(requestId);
-        if (!pending) { rejections.push({ reason: "cancel-transfer-from-savings-no-matching-request", opId: `${trxId}-${index}`, requestId }); break; }
+        if (!pending) { refusals.push({ reason: "cancel-transfer-from-savings-no-matching-request", opId: `${trxId}-${index}`, requestId }); break; }
         pendingWithdrawalsByRequestId.delete(requestId);
         openAccount(pendingSavingsWithdrawalAccount);
         openAccount(savingsAccount);
@@ -410,7 +410,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "proposal_pay": {
         if (payload.receiver !== account) break;
         const { amount, commodity } = splitAmount(payload.payment);
-        openAccount(storageAccount);
+        openAccount(custodyAccount);
         openAccount(OTHER_INCOME);
         transactions.push({
           date,
@@ -419,7 +419,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             narration: "DHF proposal payment",
             metadata: { op_id: `${trxId}-${index}` },
             postings: [
-              { account: storageAccount, amount, commodity },
+              { account: custodyAccount, amount, commodity },
               { account: OTHER_INCOME, amount: negateDecimalString(amount), commodity },
             ],
           }),
@@ -427,7 +427,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         break;
       }
       default:
-        rejections.push({ reason: "unhandled-operation-kind", kind, opId: `${trxId}-${index}` });
+        refusals.push({ reason: "unhandled-operation-kind", kind, opId: `${trxId}-${index}` });
     }
   }
 
@@ -451,7 +451,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
   }
 
   for (const fillResult of hiveEngineFills) {
-    if (!fillResult.ok) { rejections.push({ reason: "fill-refused", refusal: fillResult.refusal }); continue; }
+    if (!fillResult.ok) { refusals.push({ reason: "fill-refused", refusal: fillResult.refusal }); continue; }
     hiveFills.push({
       ...fillResult.fill,
       baseQuantity: plainDecimal(fillResult.fill.baseQuantity),
@@ -480,9 +480,9 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         fillsBooked += 1;
       }
       for (const a of derived.accountsToOpen) openAccount(a.account ?? a);
-      for (const r of derived.refusals) rejections.push({ reason: "fill-transaction-refusal", detail: r });
+      for (const r of derived.refusals) refusals.push({ reason: "fill-transaction-refusal", detail: r });
     } catch (error) {
-      rejections.push({ reason: "fill-transactions-derivation-failed", baseCommodity, fillCount: fills.length, error: String(error?.message ?? error) });
+      refusals.push({ reason: "fill-transactions-derivation-failed", baseCommodity, fillCount: fills.length, error: String(error?.message ?? error) });
     }
   }
 
@@ -496,9 +496,9 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         const incoming = entry.to === account;
         const outgoing = entry.from === account;
         if (!incoming && !outgoing) break;
-        if (!hiveEngineStorageAccount) break;
-        openAccount(hiveEngineStorageAccount);
-        const storageAmount = incoming ? entry.quantity : negateDecimalString(entry.quantity);
+        if (!hiveEngineCustodyAccount) break;
+        openAccount(hiveEngineCustodyAccount);
+        const custodyAmount = incoming ? entry.quantity : negateDecimalString(entry.quantity);
         const counterAccount = incoming ? OTHER_INCOME : OTHER_EXPENSE;
         openAccount(counterAccount);
         transactions.push({
@@ -507,8 +507,8 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
             date, narration: `Hive-Engine transfer ${incoming ? "from" : "to"} ${incoming ? entry.from : entry.to}`,
             metadata: { op_id: opId },
             postings: [
-              { account: hiveEngineStorageAccount, amount: storageAmount, commodity: entry.symbol },
-              { account: counterAccount, amount: negateDecimalString(storageAmount), commodity: entry.symbol },
+              { account: hiveEngineCustodyAccount, amount: custodyAmount, commodity: entry.symbol },
+              { account: counterAccount, amount: negateDecimalString(custodyAmount), commodity: entry.symbol },
             ],
           }),
         });
@@ -516,14 +516,14 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       }
       case "tokens_issue":
       case "distribution_checkPendingDistributions": {
-        if (!hiveEngineStorageAccount) break;
-        openAccount(hiveEngineStorageAccount);
+        if (!hiveEngineCustodyAccount) break;
+        openAccount(hiveEngineCustodyAccount);
         openAccount(STAKING);
         transactions.push({
           date, tx: renderTransaction({
             date, narration: "Hive-Engine distribution", metadata: { op_id: opId },
             postings: [
-              { account: hiveEngineStorageAccount, amount: entry.quantity, commodity: entry.symbol },
+              { account: hiveEngineCustodyAccount, amount: entry.quantity, commodity: entry.symbol },
               { account: STAKING, amount: negateDecimalString(entry.quantity), commodity: entry.symbol },
             ],
           }),
@@ -543,9 +543,9 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         // produced a real, chain-disprovable balance mismatch. Author and benefactor rewards
         // fold into Income:Hive:Author (this section has no separate benefactor account); tribe
         // curation rewards book to Income:Hive:Curation.
-        if (!hiveEngineStorageAccount) break;
+        if (!hiveEngineCustodyAccount) break;
         const isStaked = entry.operation.endsWith("_stake");
-        const destination = isStaked ? heStakedAccount : hiveEngineStorageAccount;
+        const destination = isStaked ? heStakedAccount : hiveEngineCustodyAccount;
         if (isStaked && !destination) break;
         const incomeAccount = entry.operation.startsWith("comments_curationReward") ? CURATION : AUTHOR;
         const totalsBucket = incomeAccount === CURATION ? nativeRewardTotals.curation : nativeRewardTotals.author;
@@ -582,13 +582,13 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       }
       case "tokens_stake": {
         if (!heStakedAccount) break;
-        openAccount(hiveEngineStorageAccount);
+        openAccount(hiveEngineCustodyAccount);
         openAccount(heStakedAccount);
         transactions.push({
           date, tx: renderTransaction({
             date, narration: "Hive-Engine stake", metadata: { op_id: opId },
             postings: [
-              { account: hiveEngineStorageAccount, amount: negateDecimalString(entry.quantity), commodity: entry.symbol },
+              { account: hiveEngineCustodyAccount, amount: negateDecimalString(entry.quantity), commodity: entry.symbol },
               { account: heStakedAccount, amount: entry.quantity, commodity: entry.symbol },
             ],
           }),
@@ -613,13 +613,13 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "tokens_unstakeDone": {
         if (!hePendingUnstakeAccount) break;
         openAccount(hePendingUnstakeAccount);
-        openAccount(hiveEngineStorageAccount);
+        openAccount(hiveEngineCustodyAccount);
         transactions.push({
           date, tx: renderTransaction({
             date, narration: "Hive-Engine unstake completed", metadata: { op_id: opId },
             postings: [
               { account: hePendingUnstakeAccount, amount: negateDecimalString(entry.quantity), commodity: entry.symbol },
-              { account: hiveEngineStorageAccount, amount: entry.quantity, commodity: entry.symbol },
+              { account: hiveEngineCustodyAccount, amount: entry.quantity, commodity: entry.symbol },
             ],
           }),
         });
@@ -664,15 +664,15 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       case "hivepegged_withdraw": {
         // The mainchain side of this bridge is already booked by its own `transfer` operation;
         // this posts only the Hive-Engine side, washed against a bridge account.
-        if (!hiveEngineStorageAccount) break;
-        openAccount(hiveEngineStorageAccount);
+        if (!hiveEngineCustodyAccount) break;
+        openAccount(hiveEngineCustodyAccount);
         openAccount("Equity:Hive-Peg-Bridge");
         const sign = entry.operation === "hivepegged_buy" ? "" : "-";
         transactions.push({
           date, tx: renderTransaction({
             date, narration: "HIVE-peg bridge (mainchain leg booked separately)", metadata: { op_id: opId },
             postings: [
-              { account: hiveEngineStorageAccount, amount: `${sign}${entry.quantity}`, commodity: entry.symbol },
+              { account: hiveEngineCustodyAccount, amount: `${sign}${entry.quantity}`, commodity: entry.symbol },
               { account: "Equity:Hive-Peg-Bridge", amount: `${sign === "-" ? "" : "-"}${entry.quantity}`, commodity: entry.symbol },
             ],
           }),
@@ -680,13 +680,13 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
         break;
       }
       default:
-        rejections.push({ reason: "unhandled-hive-engine-operation", operation: entry.operation, opId });
+        refusals.push({ reason: "unhandled-hive-engine-operation", operation: entry.operation, opId });
     }
   }
 
   if (pendingWithdrawalsByRequestId.size > 0) {
     for (const [requestId, { amount, commodity }] of pendingWithdrawalsByRequestId) {
-      rejections.push({ reason: "savings-withdrawal-still-pending-at-range-end", requestId, amount, commodity });
+      refusals.push({ reason: "savings-withdrawal-still-pending-at-range-end", requestId, amount, commodity });
     }
   }
 
@@ -694,11 +694,11 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
 
   const openDirectives = [...accountsOpened].sort().map((a) => `${rangeStart} open ${a}`);
   const openingPostings = [];
-  if (!isZero(openingBalances.hive)) openingPostings.push({ account: storageAccount, amount: openingBalances.hive, commodity: "HIVE" });
-  if (!isZero(openingBalances.hbd)) openingPostings.push({ account: storageAccount, amount: openingBalances.hbd, commodity: "HBD" });
-  if (!isZero(openingBalances.vests)) openingPostings.push({ account: storageAccount, amount: openingBalances.vests, commodity: "VESTS" });
+  if (!isZero(openingBalances.hive)) openingPostings.push({ account: custodyAccount, amount: openingBalances.hive, commodity: "HIVE" });
+  if (!isZero(openingBalances.hbd)) openingPostings.push({ account: custodyAccount, amount: openingBalances.hbd, commodity: "HBD" });
+  if (!isZero(openingBalances.vests)) openingPostings.push({ account: custodyAccount, amount: openingBalances.vests, commodity: "VESTS" });
   for (const [symbol, amount] of Object.entries(openingBalances.hiveEngine ?? {})) {
-    if (hiveEngineStorageAccount && !isZero(amount)) openingPostings.push({ account: hiveEngineStorageAccount, amount, commodity: symbol });
+    if (hiveEngineCustodyAccount && !isZero(amount)) openingPostings.push({ account: hiveEngineCustodyAccount, amount, commodity: symbol });
   }
   const openingBlock = [];
   if (openingPostings.length > 0) {
@@ -720,9 +720,9 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
     // fold every posting to custodyAccount/hiveEngineCustodyAccount by commodity, starting
     // from the opening balances, to arrive at the ledger's own computed closing position.
     const running = {
-      [storageAccount]: { HIVE: openingBalances.hive, HBD: openingBalances.hbd, VESTS: openingBalances.vests },
+      [custodyAccount]: { HIVE: openingBalances.hive, HBD: openingBalances.hbd, VESTS: openingBalances.vests },
     };
-    if (hiveEngineStorageAccount) running[hiveEngineStorageAccount] = { ...openingBalances.hiveEngine };
+    if (hiveEngineCustodyAccount) running[hiveEngineCustodyAccount] = { ...openingBalances.hiveEngine };
     const postingLine = /^ {2}(\S+)\s+(-?\d+(?:\.\d+)?)\s+(\S+)(?:\s+@\s+\S+\s+\S+)?$/u;
     for (const { tx } of transactions) {
       for (const line of tx.split("\n")) {
@@ -737,18 +737,18 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
   })();
 
   for (const [commodity, chainValue] of [["HIVE", chainClosingBalances.hive], ["HBD", chainClosingBalances.hbd], ["VESTS", chainClosingBalances.vests]]) {
-    const computed = computedClosing[storageAccount]?.[commodity] ?? ZERO;
+    const computed = computedClosing[custodyAccount]?.[commodity] ?? ZERO;
     const match = compareDecimalStrings(computed, chainValue) === 0;
-    balanceComparison.push({ account: storageAccount, commodity, computedClosing: computed, chainClosing: chainValue, match });
-    openAccount(storageAccount);
-    closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: storageAccount, amount: chainValue, commodity, metadata: { source: "chain-live-read" } }));
+    balanceComparison.push({ account: custodyAccount, commodity, computedClosing: computed, chainClosing: chainValue, match });
+    openAccount(custodyAccount);
+    closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: custodyAccount, amount: chainValue, commodity, metadata: { source: "chain-live-read" } }));
   }
-  if (hiveEngineStorageAccount) {
+  if (hiveEngineCustodyAccount) {
     for (const [symbol, chainValue] of Object.entries(chainClosingBalances.hiveEngine ?? {})) {
-      const computed = computedClosing[hiveEngineStorageAccount]?.[symbol] ?? ZERO;
+      const computed = computedClosing[hiveEngineCustodyAccount]?.[symbol] ?? ZERO;
       const match = compareDecimalStrings(computed, chainValue) === 0;
-      balanceComparison.push({ account: hiveEngineStorageAccount, commodity: symbol, computedClosing: computed, chainClosing: chainValue, match });
-      closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: hiveEngineStorageAccount, amount: chainValue, commodity: symbol, metadata: { source: "chain-live-read" } }));
+      balanceComparison.push({ account: hiveEngineCustodyAccount, commodity: symbol, computedClosing: computed, chainClosing: chainValue, match });
+      closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: hiveEngineCustodyAccount, amount: chainValue, commodity: symbol, metadata: { source: "chain-live-read" } }));
     }
   }
 
@@ -768,7 +768,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
     fillsBooked,
     nativeRewardTotals,
     balanceComparison,
-    refusals: rejections,
+    refusals,
   };
 }
 

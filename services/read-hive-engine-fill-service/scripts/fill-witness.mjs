@@ -5,7 +5,7 @@ export function resolveOperation(result, transactionId) {
   return matched.length === 1 ? matched[0] : null;
 }
 
-export function witnessHashRejection(witnesses) {
+export function witnessHashRefusal(witnesses) {
   if (!Array.isArray(witnesses) || witnesses.length < 2) {
     throw new TypeError("fill witnesses require at least two observations");
   }
