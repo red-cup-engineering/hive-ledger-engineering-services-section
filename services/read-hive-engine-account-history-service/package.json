@@ -21,7 +21,8 @@
     "schemas"
   ],
   "dependencies": {
-    "@red-cup-engineering/read-hive-engine-fill-service": "^0.1.2"
+    "@red-cup-engineering/read-hive-engine-fill-service": "^0.1.2",
+    "@red-cup-engineering/parse-javascript-argv-service": "^0.3.0 || 0.3.1-dev.0"
   },
   "devDependencies": {},
   "scripts": {

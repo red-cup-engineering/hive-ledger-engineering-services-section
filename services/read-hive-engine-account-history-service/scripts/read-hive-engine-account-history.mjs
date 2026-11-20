@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sleep } from "@red-cup-engineering/parse-javascript-argv-service";
 /**
  * read-hive-engine-account-history — pages a Hive-Engine account's operation history from
  * two independent public REST indexers, witnessing each page between them, over an optional
@@ -57,9 +58,7 @@ function withinRange(timestampSeconds, from, to) {
   return true;
 }
 
-function delay(ms) {
-  return new Promise((resolve) => { setTimeout(resolve, ms); });
-}
+
 
 /**
  * Fetch one page, retrying a transient failure (non-2xx, or a non-JSON body such as an HTML
@@ -72,7 +71,7 @@ function delay(ms) {
 async function fetchPageWithRetry(url, fetchImpl, { retries = 4, retryDelayMs = 500 } = {}) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
-    if (attempt > 0) await delay(retryDelayMs * attempt); // eslint-disable-line no-await-in-loop
+    if (attempt > 0) await sleep(retryDelayMs * attempt); // eslint-disable-line no-await-in-loop
     // eslint-disable-next-line no-await-in-loop
     const response = await fetchImpl(url);
     if (!response.ok) { lastError = new Error(`read-hive-engine-account-history: HTTP ${response.status} from ${url}`); continue; }
