@@ -15,9 +15,9 @@ history from two independent public nodes, witnessed against each other, with
 VESTS carried alongside HP at the chain's vests-to-HP ratio; `read-hive-engine-account-history-service`
 does the same over Hive-Engine, composing `@red-cup-engineering/read-hive-engine-fill-service`
 for market and pool fills rather than re-deriving them; `derive-hive-account-ledger-service`
-is the pure transformation turning both histories plus price directives into a
-costed Beancount ledger for the supported account operations, composing
-`@red-cup-engineering/derive-set-of-fill-transactions-service` for venue fills;
+is the pure transformation turning both histories into a Beancount ledger for the
+supported account operations, booking venue fills as exact conversions on the custody
+account that holds the assets;
 `hive-auto-ledger-cli/hive-auto-ledger-cli.mjs` composes all three for one account and range,
 writing the ledger and running `farolfi`'s balance and valuation reports over
 it. Every read is read-only; no key is ever required or accepted.

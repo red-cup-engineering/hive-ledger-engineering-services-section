@@ -3,8 +3,13 @@
  * derive-hive-account-ledger — turns one Hive account's mainchain and Hive-Engine
  * operation history plus price directives into a complete Beancount ledger: reward
  * income booked once at the chain-confirmed claim, transfers, vesting/savings
- * conversions, venue fills composed through derive-set-of-fill-transactions-service,
- * and a closing balance assertion from the chain.
+ * conversions, venue fills booked as conversions on the custody accounts that hold the
+ * assets, and closing balance assertions from the chain.
+ *
+ * A Beancount balance assertion on an account includes every sub-account beneath it, so the
+ * assertions written here are stated for the whole tree (liquid plus the chain-evidenced
+ * sub-accounts) and again for each sub-account, and funds in flight (pending savings
+ * withdrawals, conversions, open orders) are held outside the custody tree.
  */
 import { renderFile, renderBalanceDirective } from "@red-cup-engineering/farolfi/ledger/maintenance/beancount-render";
 import {
@@ -15,7 +20,6 @@ import {
   negateDecimalString,
   stripUnitSuffix,
 } from "@red-cup-engineering/exact-number-codec/decimal-string";
-import { deriveSetOfFillTransactions } from "@red-cup-engineering/farolfi/ledger/maintenance/venue-fills";
 
 const ZERO = "0";
 
@@ -55,9 +59,9 @@ function quoteEscape(text) {
   return String(text).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", " ");
 }
 
-function renderPosting({ account, amount, commodity, price }) {
+function renderPosting({ account, amount, commodity, price, totalPrice }) {
   if (amount === undefined) return `  ${account}`;
-  const priceSuffix = price ? ` @ ${price}` : "";
+  const priceSuffix = totalPrice ? ` @@ ${totalPrice}` : price ? ` @ ${price}` : "";
   return `  ${account}  ${amount} ${commodity}${priceSuffix}`;
 }
 
@@ -67,9 +71,11 @@ function renderPosting({ account, amount, commodity, price }) {
  * (never elided; every weight is computed by this service before it is written). A posting may
  * carry a `price` (a rendered "<amount> <commodity>" string) linking its weight to a different
  * commodity, required whenever a transaction converts between two non-fungible units (Beancount
- * cannot otherwise infer that e.g. a HIVE decrease and a VESTS increase net to zero).
+ * cannot otherwise infer that e.g. a HIVE decrease and a VESTS increase net to zero). A posting
+ * may instead carry a `totalPrice` (rendered `@@`), the exact total in the other commodity,
+ * which needs no per-unit rounding.
  * @param {{ date: string, narration: string, metadata?: Record<string, string>,
- *   postings: { account: string, amount?: string, commodity?: string, price?: string }[] }} input
+ *   postings: { account: string, amount?: string, commodity?: string, price?: string, totalPrice?: string }[] }} input
  * @returns {string}
  */
 export function renderTransaction({ date, narration, metadata = {}, postings }) {
@@ -111,17 +117,39 @@ export function splitClaimByAccrual(claimAmount, pendingAuthor, pendingCuration)
 }
 
 /**
+ * The account that holds funds in flight for a custody account, outside the custody tree so that
+ * the chain's liquid-plus-savings figure is directly comparable to an assertion on the tree.
+ * @param {string} custodyAccount
+ * @returns {string}
+ */
+export function inFlightAccountFor(custodyAccount) {
+  return custodyAccount.includes(":Custody:")
+    ? custodyAccount.replace(":Custody:", ":In-Flight:")
+    : `${custodyAccount}-In-Flight`;
+}
+
+const SELF_OWNED = Object.freeze({ hive: ZERO, hbd: ZERO, vests: ZERO, hiveEngine: {} });
+
+/**
  * Derive a complete Beancount ledger for one Hive account.
- * @param {{ account: string, rangeStart: string, rangeEnd: string, hiveOperations: object[],
- *   hiveEngineEntries: object[], hiveEngineFills: object[], custodyAccount: string,
- *   hiveEngineCustodyAccount: string,
- *   openingBalances: { hive: string, hbd: string, vests: string, hiveEngine: Record<string, string> },
- *   chainClosingBalances: { hive: string, hbd: string, vests: string, hiveEngine: Record<string, string> } }} input
- * @param {{ deriveFillsImpl?: typeof deriveSetOfFillTransactions }} [options]
+ *
+ * Balance assertions follow Beancount's rule that an assertion on an account covers the account
+ * and everything beneath it: the custody account is asserted for its whole tree (liquid balance
+ * plus savings, and for Hive-Engine plus staked, pending-unstake and delegated-out), and each
+ * sub-account is asserted on its own from the chain's separate figure for it.
+ * @param {{ account: string, rangeStart: string, rangeEnd: string, balanceDate?: string,
+ *   hiveOperations: object[], hiveEngineEntries: object[], hiveEngineFills: object[],
+ *   custodyAccount: string, hiveEngineCustodyAccount: string,
+ *   openingBalances: ChainBalances, chainClosingBalances: ChainBalances }} input
+ *   `balanceDate` is the date of the closing assertions; it must be after the last day of
+ *   operations the history covers (Beancount checks an assertion at the start of its date).
+ *   It defaults to `rangeEnd`.
+ *   ChainBalances: `{ hive, hbd, vests, hiveSavings?, hbdSavings?, hiveEngine: {SYMBOL: liquid},
+ *   hiveEngineStaked?, hiveEnginePendingUnstake?, hiveEngineDelegatedOut?: {SYMBOL: amount} }`.
  * @returns {object}
  * @throws {TypeError} When a required field is missing.
  */
-export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFillTransactions } = {}) {
+export function deriveHiveAccountLedger(input) {
   if (!input || typeof input.account !== "string" || input.account === "") {
     throw new TypeError("derive-hive-account-ledger: input.account must be a non-empty string");
   }
@@ -131,13 +159,16 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
   const {
     account, rangeStart, rangeEnd, custodyAccount, hiveEngineCustodyAccount,
     hiveOperations = [], hiveEngineEntries = [], hiveEngineFills = [],
-    openingBalances = { hive: ZERO, hbd: ZERO, vests: ZERO, hiveEngine: {} },
-    chainClosingBalances = { hive: ZERO, hbd: ZERO, vests: ZERO, hiveEngine: {} },
+    openingBalances = SELF_OWNED,
+    chainClosingBalances = SELF_OWNED,
   } = input;
+  const balanceDate = input.balanceDate ?? rangeEnd;
 
   const savingsAccount = `${custodyAccount}:Savings`;
-  const pendingSavingsWithdrawalAccount = `${custodyAccount}:Pending-Savings-Withdrawal`;
-  const tradingAccount = `${custodyAccount}:Trading`;
+  const inFlightAccount = inFlightAccountFor(custodyAccount);
+  const pendingSavingsWithdrawalAccount = `${inFlightAccount}:Pending-Savings-Withdrawal`;
+  const pendingConversionAccount = `${inFlightAccount}:Pending-Conversion`;
+  const openOrdersAccount = `${inFlightAccount}:Open-Orders`;
   const heStakedAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Staked` : null;
   const hePendingUnstakeAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Pending-Unstake` : null;
   const heDelegatedOutAccount = hiveEngineCustodyAccount ? `${hiveEngineCustodyAccount}:Delegated-Out` : null;
@@ -157,6 +188,7 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
   const pendingAuthor = {};
   const pendingCuration = {};
   const pendingWithdrawalsByRequestId = new Map();
+  let internalMarketFills = 0;
 
   // History readers commonly overlap their windows.  A chain operation is identified by the
   // transaction and its operation position, so process it once rather than booking it twice.
@@ -172,75 +204,85 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
       seenOperationIds.add(operationId);
       return true;
     });
-  const fillOrderOps = [];
+
+  const book = (date, narration, metadata, postings) => {
+    for (const p of postings) openAccount(p.account);
+    transactions.push({ date, tx: renderTransaction({ date, narration, metadata, postings }) });
+  };
+
+  /**
+   * One asset exchanged for another inside a single account tree: the disposed leg leaves
+   * `fromAccount` carrying the exact total of the acquired leg as its price, so the transaction
+   * balances on the venue's own numbers and needs no cost-basis lots.
+   */
+  const bookConversion = ({ date, narration, metadata, fromAccount, toAccount, disposed, acquired }) => {
+    book(date, narration, metadata, [
+      { account: fromAccount, amount: negateDecimalString(disposed.amount), commodity: disposed.commodity, totalPrice: `${acquired.amount} ${acquired.commodity}` },
+      { account: toAccount, amount: acquired.amount, commodity: acquired.commodity },
+    ]);
+  };
+
+  /** A plain move of one asset between two accounts. */
+  const bookMove = ({ date, narration, metadata, fromAccount, toAccount, amount, commodity }) => {
+    book(date, narration, metadata, [
+      { account: fromAccount, amount: negateDecimalString(amount), commodity },
+      { account: toAccount, amount, commodity },
+    ]);
+  };
+
+  const bookTransfer = ({ date, opId, payload, narrationPrefix }) => {
+    const { amount, commodity } = splitAmount(payload.amount);
+    const incoming = payload.to === account;
+    const outgoing = payload.from === account;
+    if (incoming === outgoing) return; // not ours, or a transfer to oneself that changes nothing
+    book(date, `${narrationPrefix} ${incoming ? "from" : "to"} ${incoming ? payload.from : payload.to}`, { op_id: opId, memo: payload.memo ?? "" },
+      incoming
+        ? [{ account: custodyAccount, amount, commodity }, { account: OTHER_INCOME, amount: negateDecimalString(amount), commodity }]
+        : [{ account: custodyAccount, amount: negateDecimalString(amount), commodity }, { account: OTHER_EXPENSE, amount, commodity }]);
+  };
 
   for (const op of sortedOps) {
     const { kind, payload, timestamp, trxId, index } = op;
     const date = dateOf(timestamp);
+    const opId = `${trxId}-${index}`;
     switch (kind) {
-      case "transfer": {
-        const { amount, commodity } = splitAmount(payload.amount);
-        const incoming = payload.to === account;
-        const outgoing = payload.from === account;
-        if (!incoming && !outgoing) break;
-        openAccount(custodyAccount);
-        const custodyAmount = incoming ? amount : negateDecimalString(amount);
-        const counterAccount = incoming ? OTHER_INCOME : OTHER_EXPENSE;
-        openAccount(counterAccount);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: `Hive transfer ${incoming ? "from" : "to"} ${incoming ? payload.from : payload.to}`,
-            metadata: { op_id: `${trxId}-${index}`, memo: payload.memo ?? "" },
-            postings: [
-              { account: custodyAccount, amount: custodyAmount, commodity },
-              { account: counterAccount, amount: negateDecimalString(custodyAmount), commodity },
-            ],
-          }),
-        });
+      case "transfer":
+        bookTransfer({ date, opId, payload, narrationPrefix: "Hive transfer" });
         break;
-      }
+      case "fill_recurrent_transfer":
+        // The recurrent_transfer operation only schedules; each execution is this virtual operation.
+        bookTransfer({ date, opId, payload, narrationPrefix: "Hive recurrent transfer" });
+        break;
       case "transfer_to_vesting_completed": {
         const hive = stripUnitSuffix(payload.hive_vested);
         const vests = stripUnitSuffix(payload.vesting_shares_received);
-        openAccount(custodyAccount);
-        // Beancount cannot infer that a HIVE decrease and a VESTS increase net to zero without
-        // a price link; the disposed (HIVE) leg carries the exact per-unit VESTS rate this
-        // conversion actually settled at, so the transaction balances on the chain's own numbers.
-        const priceVestsPerHive = isZero(hive) ? null : divideDecimalStrings(vests, hive, 12);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Power up (HIVE to VESTS)",
-            metadata: { op_id: `${trxId}-${index}` },
-            postings: [
-              { account: custodyAccount, amount: negateDecimalString(hive), commodity: "HIVE", price: priceVestsPerHive ? `${priceVestsPerHive} VESTS` : undefined },
-              { account: custodyAccount, amount: vests, commodity: "VESTS" },
-            ],
-          }),
-        });
+        const from = payload.from_account ?? account;
+        const to = payload.to_account ?? account;
+        const hiveLeaves = from === account;
+        const vestsArrive = to === account;
+        if (!hiveLeaves && !vestsArrive) break;
+        if (hiveLeaves && vestsArrive) {
+          bookConversion({ date, narration: "Power up (HIVE to VESTS)", metadata: { op_id: opId }, fromAccount: custodyAccount, toAccount: custodyAccount, disposed: { amount: hive, commodity: "HIVE" }, acquired: { amount: vests, commodity: "VESTS" } });
+        } else if (hiveLeaves) {
+          book(date, `Power up for ${to}`, { op_id: opId }, [{ account: custodyAccount, amount: negateDecimalString(hive), commodity: "HIVE" }, { account: OTHER_EXPENSE, amount: hive, commodity: "HIVE" }]);
+        } else {
+          book(date, `Power up from ${from}`, { op_id: opId }, [{ account: custodyAccount, amount: vests, commodity: "VESTS" }, { account: OTHER_INCOME, amount: negateDecimalString(vests), commodity: "VESTS" }]);
+        }
         break;
       }
       case "fill_vesting_withdraw": {
         const withdrawn = splitAmount(payload.withdrawn);
         const deposited = splitAmount(payload.deposited);
-        if (withdrawn.commodity !== "VESTS") { refusals.push({ reason: "unexpected-fill-vesting-withdraw-shape", opId: `${trxId}-${index}` }); break; }
-        openAccount(custodyAccount);
-        const priceDepositedPerVests = isZero(withdrawn.amount) ? null : divideDecimalStrings(deposited.amount, withdrawn.amount, 12);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Power down (VESTS to HIVE)",
-            metadata: { op_id: `${trxId}-${index}` },
-            postings: [
-              { account: custodyAccount, amount: negateDecimalString(withdrawn.amount), commodity: "VESTS", price: priceDepositedPerVests ? `${priceDepositedPerVests} ${deposited.commodity}` : undefined },
-              { account: custodyAccount, amount: deposited.amount, commodity: deposited.commodity },
-            ],
-          }),
-        });
+        if (withdrawn.commodity !== "VESTS") { refusals.push({ reason: "unexpected-fill-vesting-withdraw-shape", opId }); break; }
+        const from = payload.from_account ?? account;
+        const to = payload.to_account ?? account;
+        if (from === account && to === account) {
+          bookConversion({ date, narration: "Power down (VESTS to HIVE)", metadata: { op_id: opId }, fromAccount: custodyAccount, toAccount: custodyAccount, disposed: withdrawn, acquired: deposited });
+        } else if (from === account) {
+          book(date, `Power down routed to ${to}`, { op_id: opId }, [{ account: custodyAccount, amount: negateDecimalString(withdrawn.amount), commodity: "VESTS" }, { account: OTHER_EXPENSE, amount: withdrawn.amount, commodity: "VESTS" }]);
+        } else if (to === account) {
+          book(date, `Power down routed from ${from}`, { op_id: opId }, [{ account: custodyAccount, amount: deposited.amount, commodity: deposited.commodity }, { account: OTHER_INCOME, amount: negateDecimalString(deposited.amount), commodity: deposited.commodity }]);
+        }
         break;
       }
       case "author_reward": {
@@ -272,218 +314,155 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
           const pA = bucketTakeAll(pendingAuthor, commodity);
           const pC = bucketTakeAll(pendingCuration, commodity);
           const split = splitClaimByAccrual(claimAmount, pA, pC);
-          openAccount(custodyAccount);
           postings.push({ account: custodyAccount, amount: claimAmount, commodity });
           if (!isZero(split.author)) {
-            openAccount(AUTHOR);
             postings.push({ account: AUTHOR, amount: negateDecimalString(split.author), commodity });
             bucketAdd(nativeRewardTotals.author, commodity, split.author);
           }
           if (!isZero(split.curation)) {
-            openAccount(CURATION);
             postings.push({ account: CURATION, amount: negateDecimalString(split.curation), commodity });
             bucketAdd(nativeRewardTotals.curation, commodity, split.curation);
           }
         }
-        if (postings.length > 0) {
-          transactions.push({
-            date,
-            tx: renderTransaction({ date, narration: "Claim reward balance", metadata: { op_id: `${trxId}-${index}` }, postings }),
-          });
-        }
+        if (postings.length > 0) book(date, "Claim reward balance", { op_id: opId }, postings);
         break;
       }
       case "interest": {
         const amount = stripUnitSuffix(payload.interest);
         if (isZero(amount)) break;
         const destination = payload.is_saved_into_hbd_balance ? savingsAccount : custodyAccount;
-        openAccount(destination);
-        openAccount(INTEREST);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "HBD savings interest",
-            metadata: { op_id: `${trxId}-${index}` },
-            postings: [
-              { account: destination, amount, commodity: "HBD" },
-              { account: INTEREST, amount: negateDecimalString(amount), commodity: "HBD" },
-            ],
-          }),
-        });
+        book(date, "HBD savings interest", { op_id: opId }, [
+          { account: destination, amount, commodity: "HBD" },
+          { account: INTEREST, amount: negateDecimalString(amount), commodity: "HBD" },
+        ]);
         bucketAdd(nativeRewardTotals.interest, "HBD", amount);
         break;
       }
       case "transfer_to_savings": {
-        if (payload.to !== account) break;
         const { amount, commodity } = splitAmount(payload.amount);
-        openAccount(custodyAccount);
-        openAccount(savingsAccount);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Transfer to savings",
-            metadata: { op_id: `${trxId}-${index}` },
-            postings: [
-              { account: custodyAccount, amount: negateDecimalString(amount), commodity },
-              { account: savingsAccount, amount, commodity },
-            ],
-          }),
-        });
+        const fromUs = payload.from === account;
+        const toUs = payload.to === account;
+        if (fromUs && toUs) bookMove({ date, narration: "Transfer to savings", metadata: { op_id: opId }, fromAccount: custodyAccount, toAccount: savingsAccount, amount, commodity });
+        else if (fromUs) book(date, `Transfer to ${payload.to}'s savings`, { op_id: opId }, [{ account: custodyAccount, amount: negateDecimalString(amount), commodity }, { account: OTHER_EXPENSE, amount, commodity }]);
+        else if (toUs) book(date, `Transfer to savings from ${payload.from}`, { op_id: opId }, [{ account: savingsAccount, amount, commodity }, { account: OTHER_INCOME, amount: negateDecimalString(amount), commodity }]);
         break;
       }
       case "transfer_from_savings": {
         if (payload.from !== account) break;
         const { amount, commodity } = splitAmount(payload.amount);
-        openAccount(savingsAccount);
-        openAccount(pendingSavingsWithdrawalAccount);
         pendingWithdrawalsByRequestId.set(String(payload.request_id), { amount, commodity });
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Transfer from savings (requested; 3-day delay)",
-            metadata: { op_id: `${trxId}-${index}`, request_id: String(payload.request_id ?? "") },
-            postings: [
-              { account: savingsAccount, amount: negateDecimalString(amount), commodity },
-              { account: pendingSavingsWithdrawalAccount, amount, commodity },
-            ],
-          }),
-        });
+        bookMove({ date, narration: "Transfer from savings (requested; 3-day delay)", metadata: { op_id: opId, request_id: String(payload.request_id ?? "") }, fromAccount: savingsAccount, toAccount: pendingSavingsWithdrawalAccount, amount, commodity });
         break;
       }
       case "fill_transfer_from_savings": {
         if (payload.from !== account) break;
         const { amount, commodity } = splitAmount(payload.amount);
-        openAccount(pendingSavingsWithdrawalAccount);
-        openAccount(custodyAccount);
         pendingWithdrawalsByRequestId.delete(String(payload.request_id));
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Transfer from savings completed",
-            metadata: { op_id: `${trxId}-${index}`, request_id: String(payload.request_id ?? "") },
-            postings: [
-              { account: pendingSavingsWithdrawalAccount, amount: negateDecimalString(amount), commodity },
-              { account: custodyAccount, amount, commodity },
-            ],
-          }),
-        });
-        break;
-      }
-      case "fill_order": {
-        if (payload.current_owner !== account && payload.open_owner !== account) break;
-        fillOrderOps.push(op);
+        const metadata = { op_id: opId, request_id: String(payload.request_id ?? "") };
+        if (payload.to === account || payload.to === undefined) {
+          bookMove({ date, narration: "Transfer from savings completed", metadata, fromAccount: pendingSavingsWithdrawalAccount, toAccount: custodyAccount, amount, commodity });
+        } else {
+          book(date, `Transfer from savings completed to ${payload.to}`, metadata, [{ account: pendingSavingsWithdrawalAccount, amount: negateDecimalString(amount), commodity }, { account: OTHER_EXPENSE, amount, commodity }]);
+        }
         break;
       }
       case "cancel_transfer_from_savings": {
         if (payload.from !== account) break;
         const requestId = String(payload.request_id ?? "");
         const pending = pendingWithdrawalsByRequestId.get(requestId);
-        if (!pending) { refusals.push({ reason: "cancel-transfer-from-savings-no-matching-request", opId: `${trxId}-${index}`, requestId }); break; }
+        if (!pending) { refusals.push({ reason: "cancel-transfer-from-savings-no-matching-request", opId, requestId }); break; }
         pendingWithdrawalsByRequestId.delete(requestId);
-        openAccount(pendingSavingsWithdrawalAccount);
-        openAccount(savingsAccount);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "Transfer from savings cancelled (returned to savings)",
-            metadata: { op_id: `${trxId}-${index}`, request_id: requestId },
-            postings: [
-              { account: pendingSavingsWithdrawalAccount, amount: negateDecimalString(pending.amount), commodity: pending.commodity },
-              { account: savingsAccount, amount: pending.amount, commodity: pending.commodity },
-            ],
-          }),
+        bookMove({ date, narration: "Transfer from savings cancelled (returned to savings)", metadata: { op_id: opId, request_id: requestId }, fromAccount: pendingSavingsWithdrawalAccount, toAccount: savingsAccount, amount: pending.amount, commodity: pending.commodity });
+        break;
+      }
+      case "convert": {
+        // HBD leaves the balance when the request is made; the HIVE arrives at the fill 3.5 days later.
+        if (payload.owner !== account) break;
+        const { amount, commodity } = splitAmount(payload.amount);
+        bookMove({ date, narration: "Conversion requested", metadata: { op_id: opId, request_id: String(payload.requestid ?? "") }, fromAccount: custodyAccount, toAccount: pendingConversionAccount, amount, commodity });
+        break;
+      }
+      case "fill_convert_request": {
+        if (payload.owner !== account) break;
+        bookConversion({
+          date, narration: "Conversion completed", metadata: { op_id: opId, request_id: String(payload.requestid ?? "") },
+          fromAccount: pendingConversionAccount, toAccount: custodyAccount, disposed: splitAmount(payload.amount_in), acquired: splitAmount(payload.amount_out),
         });
+        break;
+      }
+      case "limit_order_create": {
+        // The amount for sale leaves the balance when the order is created and is held by the order.
+        if (payload.owner !== account) break;
+        const { amount, commodity } = splitAmount(payload.amount_to_sell);
+        bookMove({ date, narration: "Market order placed", metadata: { op_id: opId, order_id: String(payload.orderid ?? "") }, fromAccount: custodyAccount, toAccount: openOrdersAccount, amount, commodity });
+        break;
+      }
+      case "limit_order_cancelled": {
+        // Virtual operation, emitted for both a cancellation and an expiry, carrying what returns.
+        if (payload.seller !== account) break;
+        const { amount, commodity } = splitAmount(payload.amount_back);
+        bookMove({ date, narration: "Market order closed (returned)", metadata: { op_id: opId, order_id: String(payload.orderid ?? "") }, fromAccount: openOrdersAccount, toAccount: custodyAccount, amount, commodity });
+        break;
+      }
+      case "fill_order": {
+        // Each side's order was funded when created, so what an order pays leaves the open-order
+        // holding and what it receives lands in the custody account.
+        const sides = [
+          ["current_owner", "current_pays", "open_pays"],
+          ["open_owner", "open_pays", "current_pays"],
+        ];
+        for (const [ownerField, paysField, getsField] of sides) {
+          if (payload[ownerField] !== account) continue;
+          internalMarketFills += 1;
+          bookConversion({
+            date, narration: "Hive internal market fill", metadata: { op_id: opId, venue: "hive-internal-market" },
+            fromAccount: openOrdersAccount, toAccount: custodyAccount, disposed: splitAmount(payload[paysField]), acquired: splitAmount(payload[getsField]),
+          });
+        }
         break;
       }
       // informational only: no balance change to a tracked account.
       case "transfer_to_vesting":
       case "withdraw_vesting":
       case "delegate_vesting_shares":
-      case "limit_order_create":
       case "limit_order_cancel":
         break;
       case "proposal_pay": {
         if (payload.receiver !== account) break;
         const { amount, commodity } = splitAmount(payload.payment);
-        openAccount(custodyAccount);
-        openAccount(OTHER_INCOME);
-        transactions.push({
-          date,
-          tx: renderTransaction({
-            date,
-            narration: "DHF proposal payment",
-            metadata: { op_id: `${trxId}-${index}` },
-            postings: [
-              { account: custodyAccount, amount, commodity },
-              { account: OTHER_INCOME, amount: negateDecimalString(amount), commodity },
-            ],
-          }),
-        });
+        book(date, "DHF proposal payment", { op_id: opId }, [
+          { account: custodyAccount, amount, commodity },
+          { account: OTHER_INCOME, amount: negateDecimalString(amount), commodity },
+        ]);
         break;
       }
       default:
-        refusals.push({ reason: "unhandled-operation-kind", kind, opId: `${trxId}-${index}` });
+        refusals.push({ reason: "unhandled-operation-kind", kind, opId });
     }
   }
 
-  // fill_order: rendered as a standard venue fill on the Hive base-layer internal market,
-  // isolated to a dedicated :Trading sub-account so its FIFO cost tracking never mixes with
-  // the plain (uncosted) reward/transfer flow in the main custody account.
-  const hiveFills = [];
-  for (const op of fillOrderOps) {
-    const { payload, timestamp, trxId, index } = op;
-    const isSeller = payload.current_owner === account;
-    const disposed = splitAmount(isSeller ? payload.current_pays : payload.open_pays);
-    const acquired = splitAmount(isSeller ? payload.open_pays : payload.current_pays);
-    const side = disposed.commodity === "HIVE" ? "sell" : "buy";
-    hiveFills.push({
-      venue: "hive-internal-market", account, fillId: `${trxId}-${index}`, date: dateOf(timestamp), side,
-      baseCommodity: "HIVE", quoteCommodity: "HBD",
-      baseQuantity: side === "sell" ? disposed.amount : acquired.amount,
-      quoteAmount: side === "sell" ? acquired.amount : disposed.amount,
-      custodyAccount: tradingAccount, mandateId: "chain-history",
-    });
-  }
-
+  // Hive-Engine market and pool fills settle on the Hive-Engine custody account, where the tokens
+  // are held; the quote amount is what actually settled, so the exchange is booked on those numbers.
+  let fillsBooked = internalMarketFills;
   for (const fillResult of hiveEngineFills) {
     if (!fillResult.ok) { refusals.push({ reason: "fill-refused", refusal: fillResult.refusal }); continue; }
-    hiveFills.push({
-      ...fillResult.fill,
-      baseQuantity: plainDecimal(fillResult.fill.baseQuantity),
-      quoteAmount: plainDecimal(fillResult.fill.quoteAmount),
-      custodyAccount: tradingAccount,
-    });
-  }
-
-  // Grouped by base commodity: derive-set-of-fill-transactions-service tracks FIFO lot state
-  // independently per (custody account, base commodity), so one commodity's insufficient-
-  // inventory RangeError must not block every OTHER commodity's otherwise-valid fills from
-  // booking (a real bug found 2026-09-05: a single bad fill zeroed out all 316 real fills).
-  let fillsBooked = 0;
-  const fillsByCommodity = new Map();
-  for (const fill of hiveFills) {
-    const list = fillsByCommodity.get(fill.baseCommodity) ?? [];
-    list.push(fill);
-    fillsByCommodity.set(fill.baseCommodity, list);
-  }
-  if (hiveFills.length > 0) openAccount(tradingAccount);
-  for (const [baseCommodity, fills] of fillsByCommodity) {
-    try {
-      const derived = deriveFillsImpl({ fills, openAccounts: [tradingAccount, "Income:Investment:Realized-Gains", "Expenses:Investment:Realized-Losses"] });
-      for (const t of derived.transactions) {
-        transactions.push({ date: t.date, tx: t.directive });
-        fillsBooked += 1;
-      }
-      for (const a of derived.accountsToOpen) openAccount(a.account ?? a);
-      for (const r of derived.refusals) refusals.push({ reason: "fill-transaction-refusal", detail: r });
-    } catch (error) {
-      refusals.push({ reason: "fill-transactions-derivation-failed", baseCommodity, fillCount: fills.length, error: String(error?.message ?? error) });
+    if (!hiveEngineCustodyAccount) { refusals.push({ reason: "fill-without-hive-engine-custody-account", fillId: fillResult.fill?.fillId }); continue; }
+    const { fill } = fillResult;
+    const base = { amount: plainDecimal(fill.baseQuantity), commodity: fill.baseCommodity };
+    const quote = { amount: plainDecimal(fill.quoteAmount), commodity: fill.quoteCommodity };
+    const sell = fill.side === "sell";
+    const postings = [
+      { account: hiveEngineCustodyAccount, amount: negateDecimalString((sell ? base : quote).amount), commodity: (sell ? base : quote).commodity, totalPrice: `${(sell ? quote : base).amount} ${(sell ? quote : base).commodity}` },
+      { account: hiveEngineCustodyAccount, amount: (sell ? quote : base).amount, commodity: (sell ? quote : base).commodity },
+    ];
+    const feeAmount = fill.feeAmount === undefined ? ZERO : plainDecimal(fill.feeAmount);
+    if (!isZero(feeAmount)) {
+      if (typeof fill.feeCommodity !== "string" || typeof fill.feeAccount !== "string") { refusals.push({ reason: "fill-fee-without-commodity-or-account", fillId: fill.fillId }); continue; }
+      postings.push({ account: hiveEngineCustodyAccount, amount: negateDecimalString(feeAmount), commodity: fill.feeCommodity });
+      postings.push({ account: fill.feeAccount, amount: feeAmount, commodity: fill.feeCommodity });
     }
+    book(fill.date, fill.narration ?? `${fill.venue} ${fill.side} ${fill.baseCommodity} for ${fill.quoteCommodity}`, { op_id: fill.fillId, venue: fill.venue }, postings);
+    fillsBooked += 1;
   }
 
   // Hive-Engine direct (non-fill) entries.
@@ -692,66 +671,103 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
 
   transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  const openDirectives = [...accountsOpened].sort().map((a) => `${rangeStart} open ${a}`);
-  const openingPostings = [];
-  if (!isZero(openingBalances.hive)) openingPostings.push({ account: custodyAccount, amount: openingBalances.hive, commodity: "HIVE" });
-  if (!isZero(openingBalances.hbd)) openingPostings.push({ account: custodyAccount, amount: openingBalances.hbd, commodity: "HBD" });
-  if (!isZero(openingBalances.vests)) openingPostings.push({ account: custodyAccount, amount: openingBalances.vests, commodity: "VESTS" });
-  for (const [symbol, amount] of Object.entries(openingBalances.hiveEngine ?? {})) {
-    if (hiveEngineCustodyAccount && !isZero(amount)) openingPostings.push({ account: hiveEngineCustodyAccount, amount, commodity: symbol });
-  }
+  // Every account's opening position: the liquid custody balances and each sub-account the chain
+  // reports separately.
+  const opening = [];
+  const addOpening = (acct, commodity, amount) => {
+    if (acct && amount !== undefined && !isZero(amount)) opening.push({ account: acct, amount, commodity });
+  };
+  addOpening(custodyAccount, "HIVE", openingBalances.hive);
+  addOpening(custodyAccount, "HBD", openingBalances.hbd);
+  addOpening(custodyAccount, "VESTS", openingBalances.vests);
+  addOpening(savingsAccount, "HIVE", openingBalances.hiveSavings);
+  addOpening(savingsAccount, "HBD", openingBalances.hbdSavings);
+  for (const [symbol, amount] of Object.entries(openingBalances.hiveEngine ?? {})) addOpening(hiveEngineCustodyAccount, symbol, amount);
+  for (const [symbol, amount] of Object.entries(openingBalances.hiveEngineStaked ?? {})) addOpening(heStakedAccount, symbol, amount);
+  for (const [symbol, amount] of Object.entries(openingBalances.hiveEnginePendingUnstake ?? {})) addOpening(hePendingUnstakeAccount, symbol, amount);
+  for (const [symbol, amount] of Object.entries(openingBalances.hiveEngineDelegatedOut ?? {})) addOpening(heDelegatedOutAccount, symbol, amount);
+
   const openingBlock = [];
-  if (openingPostings.length > 0) {
+  if (opening.length > 0) {
     openAccount("Equity:Opening-Balances");
+    for (const p of opening) openAccount(p.account);
     openingBlock.push(renderTransaction({
       date: rangeStart,
       narration: `Opening evidenced Hive balances for ${account}`,
       metadata: { source_id: `HIVE-LEDGER-OPEN-${account.toUpperCase()}-${rangeStart}` },
       postings: [
-        ...openingPostings,
-        ...openingPostings.map((p) => ({ account: "Equity:Opening-Balances", amount: negateDecimalString(p.amount), commodity: p.commodity })),
+        ...opening,
+        ...opening.map((p) => ({ account: "Equity:Opening-Balances", amount: negateDecimalString(p.amount), commodity: p.commodity })),
       ],
     }));
   }
 
+  // The ledger's own position in every account, by folding the opening and every rendered posting.
+  const accountBalances = {};
+  const fold = (acct, commodity, amount) => {
+    accountBalances[acct] ??= {};
+    accountBalances[acct][commodity] = addDecimalStrings([accountBalances[acct][commodity] ?? ZERO, amount]);
+  };
+  for (const p of opening) fold(p.account, p.commodity, p.amount);
+  const postingLine = /^ {2}(\S+)\s+(-?\d+(?:\.\d+)?)\s+(\S+)(?:\s+@@?\s+\S+\s+\S+)?$/u;
+  for (const { tx } of transactions) {
+    for (const line of tx.split("\n")) {
+      const m = postingLine.exec(line);
+      if (m) fold(m[1], m[3], m[2]);
+    }
+  }
+  const exactBalance = (acct, commodity) => accountBalances[acct]?.[commodity] ?? ZERO;
+  // Beancount counts an account together with every account beneath it.
+  const treeBalance = (root, commodity) => Object.keys(accountBalances)
+    .filter((acct) => acct === root || acct.startsWith(`${root}:`))
+    .reduce((sum, acct) => addDecimalStrings([sum, exactBalance(acct, commodity)]), ZERO);
+
   const balanceComparison = [];
   const closingBlock = [];
-  const computedClosing = (() => {
-    // fold every posting to custodyAccount/hiveEngineCustodyAccount by commodity, starting
-    // from the opening balances, to arrive at the ledger's own computed closing position.
-    const running = {
-      [custodyAccount]: { HIVE: openingBalances.hive, HBD: openingBalances.hbd, VESTS: openingBalances.vests },
-    };
-    if (hiveEngineCustodyAccount) running[hiveEngineCustodyAccount] = { ...openingBalances.hiveEngine };
-    const postingLine = /^ {2}(\S+)\s+(-?\d+(?:\.\d+)?)\s+(\S+)(?:\s+@\s+\S+\s+\S+)?$/u;
-    for (const { tx } of transactions) {
-      for (const line of tx.split("\n")) {
-        const m = postingLine.exec(line);
-        if (!m) continue;
-        const [, acct, amt, sym] = m;
-        if (!running[acct]) continue;
-        running[acct][sym] = addDecimalStrings([running[acct][sym] ?? ZERO, amt]);
-      }
-    }
-    return running;
-  })();
+  const assertBalance = ({ acct, commodity, chainValue, tree }) => {
+    const computed = tree ? treeBalance(acct, commodity) : exactBalance(acct, commodity);
+    balanceComparison.push({ account: acct, commodity, scope: tree ? "tree" : "account", computedClosing: computed, chainClosing: chainValue, match: compareDecimalStrings(computed, chainValue) === 0 });
+    openAccount(acct);
+    closingBlock.push(renderBalanceDirective({ date: balanceDate, account: acct, amount: chainValue, commodity, metadata: { source: "chain-live-read" } }));
+  };
+  const sum = (...values) => addDecimalStrings(values.map((v) => v ?? ZERO));
 
-  for (const [commodity, chainValue] of [["HIVE", chainClosingBalances.hive], ["HBD", chainClosingBalances.hbd], ["VESTS", chainClosingBalances.vests]]) {
-    const computed = computedClosing[custodyAccount]?.[commodity] ?? ZERO;
-    const match = compareDecimalStrings(computed, chainValue) === 0;
-    balanceComparison.push({ account: custodyAccount, commodity, computedClosing: computed, chainClosing: chainValue, match });
-    openAccount(custodyAccount);
-    closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: custodyAccount, amount: chainValue, commodity, metadata: { source: "chain-live-read" } }));
+  // Mainchain. The liquid balance is asserted on the custody account's whole tree together with
+  // the savings figure the chain reports separately; savings is then asserted on its own, which
+  // leaves the liquid balance as the remainder of two chain-evidenced figures.
+  const chain = chainClosingBalances;
+  assertBalance({ acct: custodyAccount, commodity: "HIVE", chainValue: sum(chain.hive, chain.hiveSavings), tree: true });
+  assertBalance({ acct: custodyAccount, commodity: "HBD", chainValue: sum(chain.hbd, chain.hbdSavings), tree: true });
+  assertBalance({ acct: custodyAccount, commodity: "VESTS", chainValue: chain.vests ?? ZERO, tree: true });
+  assertBalance({ acct: savingsAccount, commodity: "HIVE", chainValue: chain.hiveSavings ?? ZERO, tree: false });
+  assertBalance({ acct: savingsAccount, commodity: "HBD", chainValue: chain.hbdSavings ?? ZERO, tree: false });
+  // The liquid balance on its own, compared in the generator (Beancount cannot state it).
+  for (const [commodity, chainValue] of [["HIVE", chain.hive], ["HBD", chain.hbd], ["VESTS", chain.vests]]) {
+    const computed = exactBalance(custodyAccount, commodity);
+    balanceComparison.push({ account: custodyAccount, commodity, scope: "liquid", computedClosing: computed, chainClosing: chainValue ?? ZERO, match: compareDecimalStrings(computed, chainValue ?? ZERO) === 0 });
   }
+
+  // Hive-Engine, per symbol: the whole tree equals liquid + staked + pending unstake + delegated out.
   if (hiveEngineCustodyAccount) {
-    for (const [symbol, chainValue] of Object.entries(chainClosingBalances.hiveEngine ?? {})) {
-      const computed = computedClosing[hiveEngineCustodyAccount]?.[symbol] ?? ZERO;
-      const match = compareDecimalStrings(computed, chainValue) === 0;
-      balanceComparison.push({ account: hiveEngineCustodyAccount, commodity: symbol, computedClosing: computed, chainClosing: chainValue, match });
-      closingBlock.push(renderBalanceDirective({ date: rangeEnd, account: hiveEngineCustodyAccount, amount: chainValue, commodity: symbol, metadata: { source: "chain-live-read" } }));
+    const symbols = new Set([
+      ...Object.keys(chain.hiveEngine ?? {}), ...Object.keys(chain.hiveEngineStaked ?? {}),
+      ...Object.keys(chain.hiveEnginePendingUnstake ?? {}), ...Object.keys(chain.hiveEngineDelegatedOut ?? {}),
+    ]);
+    for (const symbol of symbols) {
+      const liquid = chain.hiveEngine?.[symbol] ?? ZERO;
+      const staked = chain.hiveEngineStaked?.[symbol] ?? ZERO;
+      const pendingUnstake = chain.hiveEnginePendingUnstake?.[symbol] ?? ZERO;
+      const delegatedOut = chain.hiveEngineDelegatedOut?.[symbol] ?? ZERO;
+      assertBalance({ acct: hiveEngineCustodyAccount, commodity: symbol, chainValue: sum(liquid, staked, pendingUnstake, delegatedOut), tree: true });
+      for (const [acct, value] of [[heStakedAccount, staked], [hePendingUnstakeAccount, pendingUnstake], [heDelegatedOutAccount, delegatedOut]]) {
+        if (!isZero(value) || accountsOpened.has(acct)) assertBalance({ acct, commodity: symbol, chainValue: value, tree: false });
+      }
+      const computed = exactBalance(hiveEngineCustodyAccount, symbol);
+      balanceComparison.push({ account: hiveEngineCustodyAccount, commodity: symbol, scope: "liquid", computedClosing: computed, chainClosing: liquid, match: compareDecimalStrings(computed, liquid) === 0 });
     }
   }
 
+  const openDirectives = [...accountsOpened].sort().map((a) => `${rangeStart} open ${a}`);
   const header = `; Hive account ledger for ${account}, range [${rangeStart}, ${rangeEnd}]. Generated by @red-cup-engineering/derive-hive-account-ledger-service. Do not hand-edit.`;
   const ledgerText = renderFile(header, [...openDirectives, ...openingBlock, ...transactions.map((t) => t.tx), ...closingBlock]);
 
@@ -761,12 +777,14 @@ export function deriveHiveAccountLedger(input, { deriveFillsImpl = deriveSetOfFi
     account,
     rangeStart,
     rangeEnd,
+    balanceDate,
     ledgerText,
     accountsOpened: [...accountsOpened].sort(),
     transactionCount: openingBlock.length + transactions.length,
     lastHiveOperationIndex,
     fillsBooked,
     nativeRewardTotals,
+    accountBalances,
     balanceComparison,
     refusals,
   };

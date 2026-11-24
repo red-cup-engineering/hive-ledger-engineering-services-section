@@ -27,6 +27,7 @@
   },
   "scripts": {
     "check": "node --check scripts/read-hive-account-history.mjs",
+    "test": "node --test test/read-hive-account-history.test.mjs",
     "pack:dry-run": "npm pack --dry-run --ignore-scripts"
   },
   "engines": {

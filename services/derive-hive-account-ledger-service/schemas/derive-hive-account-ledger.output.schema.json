@@ -27,7 +27,7 @@
         "type": "object",
         "required": ["account", "commodity", "computedClosing", "chainClosing", "match"],
         "properties": {
-          "account": { "type": "string" }, "commodity": { "type": "string" },
+          "account": { "type": "string" }, "commodity": { "type": "string" }, "scope": { "enum": ["tree", "account", "liquid"] },
           "computedClosing": { "type": "string" }, "chainClosing": { "type": "string" },
           "match": { "type": "boolean" }
         }

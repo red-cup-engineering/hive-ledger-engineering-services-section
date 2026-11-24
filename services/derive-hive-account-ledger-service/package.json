@@ -1,7 +1,7 @@
 {
   "name": "@red-cup-engineering/derive-hive-account-ledger-service",
   "version": "0.1.9-dev.0",
-  "description": "Pure transformation deriving a complete Beancount ledger for one Hive account from its mainchain operation history, its Hive-Engine operation history, and price directives: reward income split across Income:Hive:Author/Curation/Interest/Staking at the chain-confirmed claim (never double-booked against the still-pending accrual), plain transfers, vesting and savings as commodity conversions at the block ratio, venue fills composed through @red-cup-engineering/derive-set-of-fill-transactions-service, opening balances at the range start, and a closing balance assertion from the chain.",
+  "description": "Pure transformation deriving a complete Beancount ledger for one Hive account from its mainchain operation history, its Hive-Engine operation history, and price directives: reward income split across Income:Hive:Author/Curation/Interest/Staking at the chain-confirmed claim (never double-booked against the still-pending accrual), plain transfers, vesting and savings as commodity conversions at the block ratio, venue fills booked as exact conversions on the custody account holding the assets, opening balances at the range start, and closing balance assertions from the chain stated for the custody tree and each sub-account.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/red-cup-engineering/hive-ledger-engineering-services-section.git",
@@ -27,6 +27,7 @@
   },
   "scripts": {
     "check": "node --check scripts/derive-hive-account-ledger.mjs",
+    "test": "node --test test/derive-hive-account-ledger.test.mjs",
     "pack:dry-run": "npm pack --dry-run --ignore-scripts"
   },
   "engines": {
